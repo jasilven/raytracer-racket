@@ -49,10 +49,12 @@
       (send bm set-argb-pixels  x y 1 1 (get-pixel xx yy s))))
   bm)
 
+;; magic factor
 (define (factor cosa)
   (define fac (* 255 (/ (expt 2 (* 10 (/ (add1 cosa) 2))) 1024)))
   (inexact->exact (round fac)))
 
+;; get pixel for final image
 (define (get-pixel x y s)
   (define hit (hit-point (vec-unit (vector x y -1)) s))
   (cond
@@ -64,24 +66,31 @@
      (avg-color (bytes-append (sphere-color s)
                               #"\255"
                               (make-bytes 3 (factor cosa))))]))
-
-;; TODO implement antialias for tracer
-;; (define (antialias bm)
-;;   (for ([y (in-range (send bm get-height))])
-;;     (define yy (* (- 1 (* 2 (/ (+ y 0.5) h))) tanfov2))
-;;     (for ([x (in-range (send bm get-width))])
-;;       (define xx (/ (* (- (* 2 (+ x 0.5)) w) tanfov2) h))
-;;       (send bm set-argb-pixels  x y 1 1 (get-pixel xx yy s)))))
+;; antialias SSAA
+(define (antialias bm)
+  (define h (send bm get-height))
+  (define w (send bm get-width))
+  (define bm2 (make-bitmap (/ w 2) (/ h 2)))
+  (define pixels (make-bytes 16))
+  (for* ([y (in-range 0 h 2)]
+         [x (in-range 0 w 2)])
+    (send bm get-argb-pixels x y 2 2 pixels)
+    (send bm2 set-argb-pixels (/ x 2) (/ y 2) 1 1 (avg-color pixels)))
+  bm2)
 
 (define (main)
   (define s (sphere #(0 0 -9) 3 #"\255\240\0\0"))
   (define fname "out.png")
 
   (printf "Raytracing:\n  ")
-  (define bm (time (raytrace 640 480 60 s)))
+  (define bm (time (raytrace 1280 960 60 s)))
+
+  (printf "Antialiasing:\n  ")
+  (define bm2 (time (antialias bm)))
+
   (printf "Writing image to ~a\n" fname)
-  (send bm save-file fname 'png)
-  bm)
+  (send bm2 save-file fname 'png)
+  bm2)
 
 (main)
 
